@@ -7,23 +7,23 @@ module RedSun
       @sqlite = SQLite3::Database.new path
 
       if init
-        @sqlite.query "CREATE TABLE attributes (id integer primary key, taction integer key, key string, attribute string, value string);"
+        @sqlite.query "CREATE TABLE attributes (id integer primary key, taction integer key, entity integer, attribute string, value string);"
         @sqlite.query "CREATE TABLE transactions (id integer primary key, timestamp string);"
-        @sqlite.query "CREATE TABLE models (id integer primary key, key string, taction integer);"
+        @sqlite.query "CREATE TABLE entity_log (id integer primary key, entity integer, taction integer);"
       end
 
       @cache = Hash.new { |h,k| h[k] = {} }
-      @model_cache = {}
+      @entity_cache = {}
       @transactions = 0
     end
 
-    def get(key, attribute)
-      if v = @cache[key][attribute]
+    def get(entity, attribute)
+      if v = @cache[entity][attribute]
         v.first
       else
-        res = @sqlite.query "select value,taction from attributes where key='#{key}' and attribute='#{attribute}'"
+        res = @sqlite.query "select value,taction from attributes where entity='#{entity}' and attribute='#{attribute}'"
         if s = res.next
-          @cache[key][attribute] = s
+          @cache[entity][attribute] = s
           return s.first
         end
 
@@ -33,8 +33,8 @@ module RedSun
       end
     end
 
-    def get_transaction(key, attribute)
-      if v = @cache[key][attribute]
+    def get_transaction(entity, attribute)
+      if v = @cache[entity][attribute]
         v.last
       end
     end
@@ -45,38 +45,38 @@ module RedSun
       @sqlite.last_insert_row_id
     end
 
-    def set_attribute(key, attribute, value)
+    def set_attribute(entity, attribute, value)
       t = new_transaction
 
-      @cache[key][attribute] = [value, t]
-      @sqlite.query "insert into attributes (taction,key,attribute,value) values ('#{t}', '#{key}', '#{attribute}', '#{value}')"
+      @cache[entity][attribute] = [value, t]
+      @sqlite.query "insert into attributes (taction,entity,attribute,value) values ('#{t}', '#{entity}', '#{attribute}', '#{value}')"
 
-      @sqlite.query "insert into models (taction,key) values ('#{t}', '#{key}')"
+      @sqlite.query "insert into entity_log (taction,entity) values ('#{t}', '#{entity}')"
 
       t
     end
 
-    def set_model(key, mod)
+    def set_entity(entity, mod)
       t = new_transaction
 
       mod.each do |attribute, value|
-        @cache[key][attribute] = [value, t]
-        @sqlite.query "insert into attributes (taction,key,attribute,value) values ('#{t}', '#{key}', '#{attribute}', '#{value}')"
+        @cache[entity][attribute] = [value, t]
+        @sqlite.query "insert into attributes (taction,entity,attribute,value) values ('#{t}', '#{entity}', '#{attribute}', '#{value}')"
       end
 
-      @sqlite.query "insert into models (taction,key) values ('#{t}', '#{key}')"
+      @sqlite.query "insert into entity_log (taction,entity) values ('#{t}', '#{entity}')"
 
-      @model_cache[key] = t
+      @entity_cache[entity] = t
 
       t
     end
 
-    def get_model(key)
-      if mod = get_cached_model(key)
+    def get_entity(entity)
+      if mod = get_cached_entity(entity)
         return mod
       end
 
-      res = @sqlite.query "select attribute,value,taction from attributes where key='#{key}' order by taction"
+      res = @sqlite.query "select attribute,value,taction from attributes where entity='#{entity}' order by taction"
 
       mod = {}
 
@@ -89,8 +89,8 @@ module RedSun
       mod
     end
 
-    def get_model_at(key, at)
-      res = @sqlite.query "select attribute,value,taction from attributes where key='#{key}' and taction <= '#{at}' order by taction"
+    def get_entity_at(entity, at)
+      res = @sqlite.query "select attribute,value,taction from attributes where entity='#{entity}' and taction <= '#{at}' order by taction"
 
       mod = {}
 
@@ -103,18 +103,18 @@ module RedSun
       mod
     end
 
-    def get_cached_model(key)
-      r = @sqlite.query "select taction from models where key='#{key}' order by taction desc limit 1"
+    def get_cached_entity(entity)
+      r = @sqlite.query "select taction from entity_log where entity='#{entity}' order by taction desc limit 1"
 
       v, = r.next
 
       r.close
 
-      return nil if @model_cache[key] != v
+      return nil if @entity_cache[entity] != v
 
       mod = {}
 
-      @cache[key].each do |k,vt|
+      @cache[entity].each do |k,vt|
         mod[k] = vt.first
       end
 
