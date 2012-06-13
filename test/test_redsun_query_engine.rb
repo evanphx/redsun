@@ -51,16 +51,18 @@ class TestRedSunQueryEngine < Test::Unit::TestCase
 
   def test_find_and_select_from_different_records
     d3 = [
-      [1, "name", "Fred"],
-      [2, "name", "Wilma"],
-      [3, "name", "Rock Quarry"],
-      [4, "name", "Astrophysics Corp"],
-      [1, "company", 3],
-      [2, "company", 4]]
+      [1, "person.name", "Fred"],
+      [2, "person.name", "Wilma"],
+      [3, "company.name", "Rock Quarry"],
+      [4, "company.name", "Astrophysics Corp"],
+      [1, "person.company", 3],
+      [2, "person.company", 4]]
 
     @q.load d3
 
-    r = @q.find [[:e, "name", :v], [:e, "company", :c], [:c, "name", :v2]],
+    r = @q.find [[:e, "person.name", :v],
+                 [:e, "person.company", :c],
+                 [:c, "company.name", :v2]],
                 [:v, :v2]
 
     assert_equal [["Fred", "Rock Quarry"], ["Wilma", "Astrophysics Corp"]], r
